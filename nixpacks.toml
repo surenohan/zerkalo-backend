@@ -1,0 +1,5 @@
+[phases.setup]
+nixPkgs = ["nodejs", "python3", "gcc", "gnumake"]
+
+[phases.install]
+cmds = ["npm ci --build-from-source"]
