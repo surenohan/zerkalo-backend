@@ -1,44 +1,63 @@
-const Database = require('better-sqlite3');
-const db = new Database('zerkalo.db');
+const path = require('path');
+const fs = require('fs');
+const initSqlJs = require('sql.js');
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS articles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guid TEXT UNIQUE,
-    title TEXT,
-    excerpt TEXT,
-    image TEXT,
-    category TEXT,
-    link TEXT,
-    published_at INTEGER,
-    likes INTEGER DEFAULT 0,
-    dislikes INTEGER DEFAULT 0
-  );
+let db;
+const DB_PATH = path.join(__dirname, 'zerkalo.db');
 
-  CREATE TABLE IF NOT EXISTS votes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    article_id INTEGER,
-    type TEXT,
-    UNIQUE(user_id, article_id)
-  );
+async function getDb() {
+  if (db) return db;
+  const SQL = await initSqlJs();
+  if (fs.existsSync(DB_PATH)) {
+    const data = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(data);
+  } else {
+    db = new SQL.Database();
+  }
+  db.run(`
+    CREATE TABLE IF NOT EXISTS articles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guid TEXT UNIQUE,
+      title TEXT,
+      excerpt TEXT,
+      image TEXT,
+      category TEXT,
+      link TEXT,
+      published_at INTEGER,
+      likes INTEGER DEFAULT 0,
+      dislikes INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS votes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      article_id INTEGER,
+      type TEXT,
+      UNIQUE(user_id, article_id)
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      first_name TEXT,
+      last_name TEXT,
+      email TEXT UNIQUE,
+      password TEXT,
+      created_at INTEGER DEFAULT (strftime('%s','now'))
+    );
+    CREATE TABLE IF NOT EXISTS comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      article_id INTEGER,
+      text TEXT,
+      created_at INTEGER DEFAULT (strftime('%s','now'))
+    );
+  `);
+  save();
+  return db;
+}
 
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    first_name TEXT,
-    last_name TEXT,
-    email TEXT UNIQUE,
-    password TEXT,
-    created_at INTEGER DEFAULT (unixepoch())
-  );
+function save() {
+  if (!db) return;
+  const data = db.export();
+  fs.writeFileSync(DB_PATH, Buffer.from(data));
+}
 
-  CREATE TABLE IF NOT EXISTS comments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    article_id INTEGER,
-    text TEXT,
-    created_at INTEGER DEFAULT (unixepoch())
-  );
-`);
-
-module.exports = db;
+module.exports = { getDb, save };
