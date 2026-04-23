@@ -121,7 +121,13 @@ app.post('/api/login', async (req, res) => {
   const token = jwt.sign({ id: user.id, first_name: user.first_name }, JWT_SECRET);
   res.json({ token, first_name: user.first_name, last_name: user.last_name });
 });
-
+app.get('/api/reset', async (req, res) => {
+  const db = await getDb();
+  db.run(`DELETE FROM articles`);
+  save();
+  await fetchAndSave();
+  res.json({ ok: true });
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`Сервер запущен на порту ${PORT}`);
