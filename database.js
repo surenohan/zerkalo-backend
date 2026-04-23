@@ -28,12 +28,12 @@ async function getDb() {
       dislikes INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS votes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      article_id INTEGER,
-      type TEXT,
-      UNIQUE(user_id, article_id)
-    );
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  voter_id TEXT,
+  article_id INTEGER,
+  type TEXT,
+  UNIQUE(voter_id, article_id)
+);
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       first_name TEXT,

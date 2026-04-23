@@ -61,12 +61,16 @@ app.get('/api/new', async (req, res) => {
   res.json(articles);
 });
 
-app.post('/api/vote', auth, async (req, res) => {
+app.post('/api/vote', async (req, res) => {
   const db = await getDb();
-  const { article_id, type } = req.body;
+  const { article_id, type, device_id } = req.body;
   if (!['like', 'dislike'].includes(type)) return res.status(400).json({ error: 'Неверный тип' });
+  if (!device_id) return res.status(400).json({ error: 'Нет device_id' });
 
-  const existing = db.exec(`SELECT * FROM votes WHERE user_id = ${req.user.id} AND article_id = ${article_id}`);
+  // Используем device_id вместо user_id
+  const voter_id = device_id;
+
+  const existing = db.exec(`SELECT * FROM votes WHERE voter_id = '${voter_id}' AND article_id = ${article_id}`);
   const vote = existing.length ? existing[0].values[0] : null;
 
   if (vote) {
@@ -85,7 +89,7 @@ app.post('/api/vote', auth, async (req, res) => {
     }
   }
 
-  db.run(`INSERT INTO votes (user_id, article_id, type) VALUES (${req.user.id}, ${article_id}, '${type}')`);
+  db.run(`INSERT INTO votes (voter_id, article_id, type) VALUES ('${voter_id}', ${article_id}, '${type}')`);
   db.run(`UPDATE articles SET ${type}s = ${type}s + 1 WHERE id = ${article_id}`);
   save();
   res.json({ action: 'added' });
