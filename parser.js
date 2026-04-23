@@ -11,12 +11,17 @@ const parser = new Parser({
 const RSS_URL = 'https://www.zerkalo.cc/feeds/posts/default?alt=rss';
 
 function extractImage(item) {
-  if (item.mediaThumbnail && item.mediaThumbnail['$'] && item.mediaThumbnail['$'].url) {
-    return item.mediaThumbnail['$'].url;
-  }
+  // Сначала ищем полную картинку в контенте статьи
   const content = item.content || '';
-  const match = content.match(/<img[^>]+src="([^">]+)"/);
-  if (match) return match[1];
+  const match = content.match(/src="([^"]+blogger\.googleusercontent\.com[^"=]+)(?:=w\d+[^"]*)?"/);
+  if (match) {
+    // Берём оригинальный размер — убираем параметры размера
+    return match[1].replace(/=w\d+-h\d+(-c)?/, '=w800-h500');
+  }
+  // Запасной вариант — thumbnail
+  if (item.mediaThumbnail && item.mediaThumbnail['$'] && item.mediaThumbnail['$'].url) {
+    return item.mediaThumbnail['$'].url.replace(/=s72.*$/, '=w800-h500');
+  }
   return null;
 }
 
