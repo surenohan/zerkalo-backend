@@ -142,3 +142,8 @@ app.get('/api/reset', async (req, res) => {
 });
 
 schedule.scheduleJob('*/30 * * * *', function() { fetchAndSave(); });
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, async () => {
+  console.log(`Сервер запущен на порту ${PORT}`);
+  await fetchAndSave();
+});
