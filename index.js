@@ -128,14 +128,17 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/reset', async (req, res) => {
   const db = await getDb();
   db.run(`DELETE FROM articles`);
+  db.run(`DROP TABLE IF EXISTS votes`);
+  db.run(`CREATE TABLE IF NOT EXISTS votes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    voter_id TEXT,
+    article_id INTEGER,
+    type TEXT,
+    UNIQUE(voter_id, article_id)
+  )`);
   save();
   await fetchAndSave();
   res.json({ ok: true });
-});
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
-  await fetchAndSave();
 });
 
 schedule.scheduleJob('*/30 * * * *', function() { fetchAndSave(); });
