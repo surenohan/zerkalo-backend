@@ -24,6 +24,7 @@ function auth(req, res, next) {
   }
 }
 
+// ── ЛЕНТА ──
 app.get('/api/feed', async (req, res) => {
   const db = await getDb();
   const page = parseInt(req.query.page) || 1;
@@ -38,6 +39,7 @@ app.get('/api/feed', async (req, res) => {
   res.json(articles);
 });
 
+// ── ПОПУЛЯРНОЕ ──
 app.get('/api/popular', async (req, res) => {
   const db = await getDb();
   const result = db.exec(`SELECT * FROM articles ORDER BY likes DESC LIMIT 50`);
@@ -49,6 +51,7 @@ app.get('/api/popular', async (req, res) => {
   res.json(articles);
 });
 
+// ── НОВИНКИ ──
 app.get('/api/new', async (req, res) => {
   const db = await getDb();
   const since = Date.now() - 24 * 60 * 60 * 1000;
@@ -61,15 +64,14 @@ app.get('/api/new', async (req, res) => {
   res.json(articles);
 });
 
+// ── ГОЛОСОВАНИЕ ──
 app.post('/api/vote', async (req, res) => {
   const db = await getDb();
   const { article_id, type, device_id } = req.body;
   if (!['like', 'dislike'].includes(type)) return res.status(400).json({ error: 'Неверный тип' });
   if (!device_id) return res.status(400).json({ error: 'Нет device_id' });
 
-  // Используем device_id вместо user_id
   const voter_id = device_id;
-
   const existing = db.exec(`SELECT * FROM votes WHERE voter_id = '${voter_id}' AND article_id = ${article_id}`);
   const vote = existing.length ? existing[0].values[0] : null;
 
@@ -95,6 +97,46 @@ app.post('/api/vote', async (req, res) => {
   res.json({ action: 'added' });
 });
 
+// ── КОММЕНТАРИИ: ПОЛУЧИТЬ ──
+app.get('/api/comments/:article_id', async (req, res) => {
+  const db = await getDb();
+  const { article_id } = req.params;
+  try {
+    const result = db.exec(`
+      SELECT c.id, c.text, c.created_at, u.first_name, u.last_name
+      FROM comments c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.article_id = ${article_id}
+      ORDER BY c.created_at ASC
+    `);
+    const comments = result.length ? result[0].values.map(row => ({
+      id: row[0], text: row[1], created_at: row[2],
+      first_name: row[3], last_name: row[4]
+    })) : [];
+    res.json(comments);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+// ── КОММЕНТАРИИ: ДОБАВИТЬ ──
+app.post('/api/comments', auth, async (req, res) => {
+  const db = await getDb();
+  const { article_id, text } = req.body;
+  if (!text || !article_id) return res.status(400).json({ error: 'Нет текста или статьи' });
+  try {
+    db.run(
+      `INSERT INTO comments (user_id, article_id, text, created_at) VALUES (?, ?, ?, ?)`,
+      [req.user.id, article_id, text, Date.now()]
+    );
+    save();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── РЕГИСТРАЦИЯ ──
 app.post('/api/register', async (req, res) => {
   const db = await getDb();
   const { first_name, last_name, email, password } = req.body;
@@ -113,9 +155,11 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// ── ВХОД ──
 app.post('/api/login', async (req, res) => {
   const db = await getDb();
   const { email, password } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email обязателен' });
   const result = db.exec(`SELECT * FROM users WHERE email = '${email}'`);
   if (!result.length || !result[0].values.length) return res.status(400).json({ error: 'Пользователь не найден' });
   const row = result[0].values[0];
@@ -125,37 +169,13 @@ app.post('/api/login', async (req, res) => {
   const token = jwt.sign({ id: user.id, first_name: user.first_name }, JWT_SECRET);
   res.json({ token, first_name: user.first_name, last_name: user.last_name });
 });
-// ── Получить комментарии ──
-app.get('/api/comments/:article_id', async (req, res) => {
-  const db = await getDb();
-  const { article_id } = req.params;
-  const result = db.exec(`
-    SELECT c.id, c.text, c.created_at, u.first_name, u.last_name
-    FROM comments c
-    JOIN users u ON c.user_id = u.id
-    WHERE c.article_id = ${article_id}
-    ORDER BY c.created_at DESC
-  `);
-  const comments = result.length ? result[0].values.map(row => ({
-    id: row[0], text: row[1], created_at: row[2],
-    first_name: row[3], last_name: row[4]
-  })) : [];
-  res.json(comments);
-});
 
-// ── Добавить комментарий ──
-app.post('/api/comments', auth, async (req, res) => {
-  const db = await getDb();
-  const { article_id, text } = req.body;
-  if (!text || !article_id) return res.status(400).json({ error: 'Нет текста или статьи' });
-  db.run(`INSERT INTO comments (user_id, article_id, text) VALUES (${req.user.id}, ${article_id}, ?)`, [text]);
-  save();
-  res.json({ ok: true });
-});
+// ── СБРОС ──
 app.get('/api/reset', async (req, res) => {
   const db = await getDb();
   db.run(`DELETE FROM articles`);
   db.run(`DROP TABLE IF EXISTS votes`);
+  db.run(`DROP TABLE IF EXISTS comments`);
   db.run(`CREATE TABLE IF NOT EXISTS votes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     voter_id TEXT,
@@ -163,12 +183,20 @@ app.get('/api/reset', async (req, res) => {
     type TEXT,
     UNIQUE(voter_id, article_id)
   )`);
+  db.run(`CREATE TABLE IF NOT EXISTS comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    article_id INTEGER,
+    text TEXT,
+    created_at INTEGER
+  )`);
   save();
   await fetchAndSave();
   res.json({ ok: true });
 });
 
 schedule.scheduleJob('*/30 * * * *', function() { fetchAndSave(); });
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`Сервер запущен на порту ${PORT}`);
