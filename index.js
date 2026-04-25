@@ -125,6 +125,33 @@ app.post('/api/login', async (req, res) => {
   const token = jwt.sign({ id: user.id, first_name: user.first_name }, JWT_SECRET);
   res.json({ token, first_name: user.first_name, last_name: user.last_name });
 });
+// ── Получить комментарии ──
+app.get('/api/comments/:article_id', async (req, res) => {
+  const db = await getDb();
+  const { article_id } = req.params;
+  const result = db.exec(`
+    SELECT c.id, c.text, c.created_at, u.first_name, u.last_name
+    FROM comments c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.article_id = ${article_id}
+    ORDER BY c.created_at DESC
+  `);
+  const comments = result.length ? result[0].values.map(row => ({
+    id: row[0], text: row[1], created_at: row[2],
+    first_name: row[3], last_name: row[4]
+  })) : [];
+  res.json(comments);
+});
+
+// ── Добавить комментарий ──
+app.post('/api/comments', auth, async (req, res) => {
+  const db = await getDb();
+  const { article_id, text } = req.body;
+  if (!text || !article_id) return res.status(400).json({ error: 'Нет текста или статьи' });
+  db.run(`INSERT INTO comments (user_id, article_id, text) VALUES (${req.user.id}, ${article_id}, ?)`, [text]);
+  save();
+  res.json({ ok: true });
+});
 app.get('/api/reset', async (req, res) => {
   const db = await getDb();
   db.run(`DELETE FROM articles`);
