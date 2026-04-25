@@ -146,8 +146,8 @@ app.post('/api/register', async (req, res) => {
     db.run(`INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)`,
       [first_name, last_name || null, email || null, hash]);
     save();
-    const result = db.exec(`SELECT last_insert_rowid()`);
-    const id = result[0].values[0][0];
+    const result = db.exec(`SELECT id FROM users WHERE rowid = last_insert_rowid()`);
+const id = result[0].values[0][0];
     const token = jwt.sign({ id, first_name }, JWT_SECRET);
     res.json({ token, first_name, last_name });
   } catch (e) {
