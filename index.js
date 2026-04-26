@@ -144,7 +144,7 @@ app.post('/api/register', async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 10);
     db.run(`INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)`,
-      [first_name, last_name || null, email || null, hash]);
+  [first_name, last_name || '', email || '', hash]);
     save();
     const result = db.exec(`SELECT id FROM users WHERE rowid = last_insert_rowid()`);
 const id = result[0].values[0][0];
