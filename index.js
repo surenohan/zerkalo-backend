@@ -7,6 +7,14 @@ const jwt = require('jsonwebtoken');
 const { getDb, save } = require('./database');
 const { fetchAndSave } = require('./parser');
 
+const fs = require('fs');
+const path = require('path');
+const DB_PATH = path.join(__dirname, 'zerkalo.db');
+if (fs.existsSync(DB_PATH)) {
+  fs.unlinkSync(DB_PATH);
+  console.log('Old DB deleted');
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
