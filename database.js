@@ -49,6 +49,11 @@ async function getDb() {
       text TEXT,
       created_at INTEGER DEFAULT (strftime('%s','now'))
     );
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token TEXT UNIQUE,
+      created_at INTEGER
+    );
   `);
   save();
   return db;

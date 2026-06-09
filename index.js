@@ -32,6 +32,44 @@ function auth(req, res, next) {
   }
 }
 
+// ── ОТПРАВКА PUSH УВЕДОМЛЕНИЙ ──
+async function sendPushNotifications(title, body) {
+  const db = await getDb();
+  try {
+    const result = db.exec(`SELECT token FROM push_tokens`);
+    if (!result.length || !result[0].values.length) return;
+
+    const tokens = result[0].values.map(row => row[0]);
+    const messages = tokens.map(token => ({
+      to: token,
+      sound: 'default',
+      title,
+      body,
+    }));
+
+    // Отправляем пачками по 100
+    const chunks = [];
+    for (let i = 0; i < messages.length; i += 100) {
+      chunks.push(messages.slice(i, i + 100));
+    }
+
+    for (const chunk of chunks) {
+      await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(chunk),
+      });
+    }
+
+    console.log(`Push sent to ${tokens.length} devices: ${title}`);
+  } catch (e) {
+    console.log('Push error:', e.message);
+  }
+}
+
 // ── ЛЕНТА ──
 app.get('/api/feed', async (req, res) => {
   const db = await getDb();
@@ -152,10 +190,10 @@ app.post('/api/register', async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 10);
     db.run(`INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)`,
-  [first_name, last_name || '', email || '', hash]);
+      [first_name, last_name || '', email || '', hash]);
     save();
     const result = db.exec(`SELECT id FROM users WHERE rowid = last_insert_rowid()`);
-const id = result[0].values[0][0];
+    const id = result[0].values[0][0];
     const token = jwt.sign({ id, first_name }, JWT_SECRET);
     res.json({ token, first_name, last_name });
   } catch (e) {
@@ -176,6 +214,27 @@ app.post('/api/login', async (req, res) => {
   if (!ok) return res.status(400).json({ error: 'Неверный пароль' });
   const token = jwt.sign({ id: user.id, first_name: user.first_name }, JWT_SECRET);
   res.json({ token, first_name: user.first_name, last_name: user.last_name });
+});
+
+// ── PUSH: РЕГИСТРАЦИЯ ТОКЕНА ──
+app.post('/api/push/register', async (req, res) => {
+  const db = await getDb();
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Нет токена' });
+  try {
+    db.run(`INSERT OR REPLACE INTO push_tokens (token, created_at) VALUES (?, ?)`,
+      [token, Date.now()]);
+    save();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── PUSH: ТЕСТ (для проверки) ──
+app.get('/api/push/test', async (req, res) => {
+  await sendPushNotifications('🔔 Тест', 'Уведомления работают!');
+  res.json({ ok: true });
 });
 
 // ── СБРОС ──
@@ -203,7 +262,58 @@ app.get('/api/reset', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── RSS ПАРСЕР каждые 30 минут ──
 schedule.scheduleJob('*/30 * * * *', function() { fetchAndSave(); });
+
+// ── РАСПИСАНИЕ ПУSH УВЕДОМЛЕНИЙ ──
+
+// 🌅 Утреннее уведомление — каждый день в 9:00 МСК (6:00 UTC)
+schedule.scheduleJob('0 6 * * *', async function() {
+  await sendPushNotifications(
+    '📖 Доброе утро!',
+    'Новые истории и рассказы ждут вас на Зеркало'
+  );
+});
+
+// 📰 Новые статьи — каждый день в 12:00 МСК (9:00 UTC)
+schedule.scheduleJob('0 9 * * *', async function() {
+  const db = await getDb();
+  const since = Date.now() - 24 * 60 * 60 * 1000;
+  const result = db.exec(`SELECT COUNT(*) FROM articles WHERE published_at > ${since}`);
+  const count = result.length ? result[0].values[0][0] : 0;
+  if (count > 0) {
+    await sendPushNotifications(
+      '✨ Новые истории',
+      `Сегодня добавлено ${count} новых рассказов — читайте прямо сейчас!`
+    );
+  }
+});
+
+// 🔥 Популярное — каждый день в 14:00 МСК (11:00 UTC)
+schedule.scheduleJob('0 11 * * *', async function() {
+  const db = await getDb();
+  const result = db.exec(`SELECT title FROM articles ORDER BY likes DESC LIMIT 1`);
+  if (result.length && result[0].values.length) {
+    const title = result[0].values[0][0];
+    await sendPushNotifications(
+      '🔥 Набирает популярность',
+      `«${title}»`
+    );
+  }
+});
+
+// 🔥 Популярное вечером — каждый день в 19:00 МСК (16:00 UTC)
+schedule.scheduleJob('0 16 * * *', async function() {
+  const db = await getDb();
+  const result = db.exec(`SELECT title FROM articles ORDER BY likes DESC LIMIT 3 OFFSET 1`);
+  if (result.length && result[0].values.length) {
+    const title = result[0].values[Math.floor(Math.random() * result[0].values.length)][0];
+    await sendPushNotifications(
+      '🔥 Популярно сегодня',
+      `«${title}»`
+    );
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
