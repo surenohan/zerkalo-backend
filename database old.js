@@ -3,9 +3,7 @@ const fs = require('fs');
 const initSqlJs = require('sql.js');
 
 let db;
-// Используем постоянное хранилище Railway Volume, если доступно
-const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
-const DB_PATH = path.join(DATA_DIR, 'zerkalo.db');
+const DB_PATH = path.join(__dirname, 'zerkalo.db');
 
 async function getDb() {
   if (db) return db;
