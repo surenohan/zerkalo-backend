@@ -233,18 +233,8 @@ app.post('/api/push/register', async (req, res) => {
 
 // ── PUSH: ТЕСТ (для проверки) ──
 app.get('/api/push/test', async (req, res) => {
-  await sendPushNotifications('✨ Новые истории', 'Сегодня добавлены новые рассказы — читайте прямо сейчас на Зеркало!');
+  await sendPushNotifications('🔔 Тест', 'Уведомления работают!');
   res.json({ ok: true });
-});
-
-// ── PUSH: СПИСОК ТОКЕНОВ (для отладки) ──
-app.get('/api/push/tokens', async (req, res) => {
-  const db = await getDb();
-  const result = db.exec(`SELECT token, created_at FROM push_tokens ORDER BY created_at DESC`);
-  const tokens = result.length ? result[0].values.map(row => ({
-    token: row[0], created_at: row[1]
-  })) : [];
-  res.json(tokens);
 });
 
 // ── СБРОС ──
