@@ -46,7 +46,7 @@ async function sendPushNotifications(title, body) {
     }
 
     for (const chunk of chunks) {
-      await fetch('https://exp.host/--/api/v2/push/send', {
+      const r = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,6 +54,8 @@ async function sendPushNotifications(title, body) {
         },
         body: JSON.stringify(chunk),
       });
+      const json = await r.json();
+      console.log('Expo push response:', JSON.stringify(json));
     }
 
     console.log(`Push sent to ${tokens.length} devices: ${title}`);
